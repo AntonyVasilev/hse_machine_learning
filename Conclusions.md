@@ -1,5 +1,8 @@
 # Задание 1 по курсу "Машинное обучение"
 ## Исполнитель: Васильев А.Н.
+
+Запуск: `streamlit run app.py`  
+Работающее приложение: https://antonyvasilev-hse-machine-learning-app-homework-1-u5sxkx.streamlit.app/
   
 ### Структура проекта:
 - Корень проекта

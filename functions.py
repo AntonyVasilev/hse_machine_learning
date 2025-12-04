@@ -151,6 +151,19 @@ def load_additional_data(path: Path) -> tuple:
     return cols_with_na, na_fill_mapping, columns, final_columns, main_columns, values_for_form, features_base_dtypes
 
 
+def load_train_data(path: Path) -> pd.DataFrame:
+    """Загрузка данных, использованных при обучении модели
+
+    Args:
+        path (Path): Путь к папке с данными
+
+    Returns:
+        pd.DataFrame: Датафрейм с загруженными данными
+    """
+    data = pd.read_parquet(path / 'df_train.parquet')
+    return data
+
+
 @st.cache_resource
 def load_model(model_path, feacture_names_path):
     """Загружаем модель через pickle"""

@@ -6,7 +6,7 @@ from pathlib import Path
 import phik  # noqa: F401
 from datetime import datetime
 import traceback
-from functions import load_model, prepare_features, load_transforms, prepare_loaded_dataframe, load_additional_data
+from functions import load_model, prepare_features, load_transforms, prepare_loaded_dataframe, load_additional_data, load_train_data
 
 st.set_page_config(page_title="Cars' selling price prediction", layout="wide")
 
@@ -57,9 +57,68 @@ if chkbx:
 
 st.line_chart(df_to_plot, x='feature_name' ,y='weight', x_label='Weight', y_label='Feature names')
 
+
+#--------------------------------------------------------------------------------------------------
+# Визуализации данных
+st.subheader("Визуализации обучающих данных")
+
+# Загрузка данных из файла
+df_to_plot = load_train_data(path=DATA_DIR)
+df_to_plot['brand'] = df_to_plot['name'].apply(lambda val: val.split()[0])
+
+plot_col1, plot_col2 = st.columns(2)
+
+with plot_col1:
+# pie chart признака brand
+    n_cars_by_brand = (
+        df_to_plot.groupby('brand').agg(n_cars=('name', 'count')).reset_index().sort_values('n_cars'))
+    n_cars_by_brand['n_cars_part'] = n_cars_by_brand['n_cars'] / n_cars_by_brand['n_cars'].sum()
+    n_cars_by_brand.loc[n_cars_by_brand['n_cars_part'] < 0.02, 'brand'] = 'Other'
+    fig1 = px.pie(
+        n_cars_by_brand,
+        values='n_cars',
+        names='brand',
+        title="Количество автомобилей по брендам"
+    )
+    st.plotly_chart(fig1, width='stretch')
+with plot_col2:
+    # Гистограмма распрелделения целевой переменной
+    fig2 = px.histogram(
+        df_to_plot, 
+        x=target_col_name, 
+        marginal="box", 
+        title='Гистаграмма распрелделения целевой переменной'
+    )
+    st.plotly_chart(fig2, width='stretch')
+
+plot_col3, plot_col4 = st.columns(2)
+
+with plot_col3:
+    # Phik-матрица корреляций признаков
+    corr_matrix = df_to_plot.phik_matrix()
+    fig3 = px.imshow(
+        corr_matrix, 
+        text_auto=True, 
+        color_continuous_scale='RdBu', 
+        title='Phik-матрица корреляций признаков'
+    )
+    st.plotly_chart(fig3, width='stretch')
+with plot_col4:
+    # Средние цены в по годам с учетом количества сидений в автомобиле
+    mean_prices_by_year = df_to_plot.groupby(['year', 'seats']).agg(mean_price=(target_col_name, 'mean')).reset_index()
+    mean_prices_by_year['seats'] = mean_prices_by_year['seats'].astype('int')
+    fig4 = px.bar(
+        mean_prices_by_year, 
+        x='year', 
+        y='mean_price', 
+        color='seats', 
+        color_continuous_scale='RdBu',
+        title='Средние цены в по годам с учетом количества сидений в автомобиле'
+    )
+    st.plotly_chart(fig4, width='stretch')
+
 #--------------------------------------------------------------------------------------------------
 st.subheader("Получение прогноза стоимости")
-
 
 # Выбор варианта получения прогноза:
 # - 'Загрузка csv-файла' - пользователь загружает csv-файл с данными. Модель делает предсказание по каждому объекту из файла,
@@ -88,62 +147,6 @@ if pred_type == 'Загрузка csv-файла':
 
     # Загружаем данные
     df = pd.read_csv(uploaded_file)
-
-    #--------------------------------------------------------------------------------------------------
-    # Визуализации данных
-    st.subheader("Визуализации данных")
-
-    df_to_plot = df.copy()
-
-    plot_col1, plot_col2 = st.columns(2)
-
-    with plot_col1:
-    # pie chart признака brand
-        df_to_plot['brand'] = df_to_plot['name'].apply(lambda val: val.split()[0])
-        n_cars_by_drand = (
-            df_to_plot.groupby('brand').agg(n_cars=('name', 'count')).reset_index().sort_values('n_cars'))
-        fig1 = px.pie(
-            n_cars_by_drand,
-            values='n_cars',
-            names='brand',
-            title="Количество автомобилей по брендам"
-        )
-        st.plotly_chart(fig1, width='stretch')
-    with plot_col2:
-        # Гистограмма распрелделения целевой переменной
-        fig2 = px.histogram(
-            df_to_plot, 
-            x=target_col_name, 
-            marginal="box", 
-            title='Гистаграмма распрелделения целевой переменной'
-        )
-        st.plotly_chart(fig2, width='stretch')
-
-    plot_col3, plot_col4 = st.columns(2)
-    
-    with plot_col3:
-        # Phik-матрица корреляций признаков
-        corr_matrix = df_to_plot.phik_matrix()
-        fig3 = px.imshow(
-            corr_matrix, 
-            text_auto=True, 
-            color_continuous_scale='RdBu', 
-            title='Phik-матрица корреляций признаков'
-        )
-        st.plotly_chart(fig3, width='stretch')
-    with plot_col4:
-        # Средние цены в по годам с учетом количества сидений в автомобиле
-        mean_prices_by_year = df_to_plot.groupby(['year', 'seats']).agg(mean_price=(target_col_name, 'mean')).reset_index()
-        mean_prices_by_year['seats'] = mean_prices_by_year['seats'].astype('int')
-        fig4 = px.bar(
-            mean_prices_by_year, 
-            x='year', 
-            y='mean_price', 
-            color='seats', 
-            color_continuous_scale='RdBu',
-            title='Средние цены в по годам с учетом количества сидений в автомобиле'
-        )
-        st.plotly_chart(fig4, width='stretch')
 
     #--------------------------------------------------------------------------------------------------
     # Приведение данных, загруженных пользователем, к формату, требуемому моделью

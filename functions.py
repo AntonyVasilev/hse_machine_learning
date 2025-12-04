@@ -24,13 +24,13 @@ def prepare_loaded_dataframe(
     ordinal_encoder: OrdinalEncoder, 
     polynominal_features: PolynomialFeatures
     ) -> pd.DataFrame:
-    """_summary_
+    """Применение всех необходимых преобразований к датафрейму, на котором будет делаться предсказание
 
     Args:
-        data (pd.DataFrame): _description_
+        data (pd.DataFrame): Исходный датафрейм, который загрузил пользователь
 
     Returns:
-        _type_: _description_
+        pd.DataFrame: Преобразованный датафрейм, готовый к использованию в модели
     """
     df = data.copy()
 
@@ -83,6 +83,14 @@ def prepare_loaded_dataframe(
 
 @st.cache_resource
 def load_transforms(path: Path) -> tuple:
+    """Загрузка энкодеров и скалеров для подготовки загруженного датафрейма / данных, введенных в форму
+
+    Args:
+        path (Path): Путь к папке с моделями 
+
+    Returns:
+        tuple: Кортеж с загруженными обученными классами энкодеров и скалеров
+    """
     # min_max_scaler
     with open(path / 'min_max_scaler.pkl', 'rb') as f:
         min_max_scaler = pickle.load(f)
@@ -104,6 +112,14 @@ def load_transforms(path: Path) -> tuple:
 
 @st.cache_resource
 def load_additional_data(path: Path) -> tuple:
+    """Загрузка вспомогательных данных, необходимых для корректной работы приложения
+
+    Args:
+        path (Path): Путь к папке с данными
+
+    Returns:
+        tuple: Кортеж с загруженными данными
+    """
     # cols_with_na
     with open(path / 'cols_with_na.json', 'rb') as f:
         cols_with_na = json.load(f)
@@ -157,7 +173,15 @@ def prepare_features(df, feature_names):
     return df_proc[feature_names]
 
 
-def convert_to_float(val):
+def convert_to_float(val: str) -> float:
+    """Приведение признаков 'mileage', 'engine', 'max_power' к формату float
+
+    Args:
+        val (str): Строковое значение
+
+    Returns:
+        float: Преобразованное значение
+    """
     if val is not np.nan:
         splitted_val = val.split()
         val_to_convert = splitted_val[0] if splitted_val else '0'
@@ -167,81 +191,101 @@ def convert_to_float(val):
             return 0.0
 
 
-def convert_to_float_torque(val):
-  if ',' in val:
-    val = ''.join(val.split(','))
-  elif '.' in val:
-    val = ''.join(val.split('.'))
-  return float(val)
+def convert_to_float_torque(val: str) -> float:
+    """Корректная конвертация значений в типу float с учетом значений с разделителями порядков из точек и запятых 
+
+    Args:
+        val (str): Строковое значение
+
+    Returns:
+        float: Преобразованное значение
+    """
+    if ',' in val:
+        val = ''.join(val.split(','))
+    elif '.' in val:
+        val = ''.join(val.split('.'))
+    return float(val)
 
 
-def parce_2_part(value):
-  if '+' in value:
-    splitted_values = value.strip().split('+')
-    splitted_val_1 = convert_to_float_torque(splitted_values[0])
-    splitted_val_2 = convert_to_float_torque(splitted_values[1].split('rpm')[0].strip().split('-')[1].strip())
-    max_torque_rpm = splitted_val_1 + splitted_val_2
-  elif '-' in value:
-      max_torque_rpm = max([convert_to_float_torque(val.strip())
-        for val in value.lower().split('rpm')[0].split('-')
-        if convert_to_float_torque(val.strip())])
-  elif '~' in value:
-    max_torque_rpm = max([convert_to_float_torque(val.strip())
-      for val in value.lower().split('rpm')[0].split('~')
-      if convert_to_float_torque(val.strip())])
-  else:
-    max_torque_rpm = convert_to_float_torque(
-        value.lower().split('rpm')[0].strip())
-  return max_torque_rpm
+def parce_2_part(value: str) -> float:
+    """Функция для корректного преобразования второй части значения torque, которое в итоге быдет записано в max_torque_rpm
 
+    Args:
+        value (str): Строковое значение
 
-def parce_torque(value):
-  if (value is None) | (value is np.nan) | (value == ''):
-    return None, None
-
-  try:
-    # Обрабатываю разные варианты разделителей
-    if '@' in value:
-      split_sign = '@'
-    elif 'at' in value:
-      split_sign = 'at'
-    elif '/' in value:
-      split_sign = '/'
+    Returns:
+        float: Преобразованное значение
+    """
+    if '+' in value:
+            splitted_values = value.strip().split('+')
+            splitted_val_1 = convert_to_float_torque(splitted_values[0])
+            splitted_val_2 = convert_to_float_torque(splitted_values[1].split('rpm')[0].strip().split('-')[1].strip())
+            max_torque_rpm = splitted_val_1 + splitted_val_2
+    elif '-' in value:
+            max_torque_rpm = max([convert_to_float_torque(val.strip())
+                for val in value.lower().split('rpm')[0].split('-')
+                if convert_to_float_torque(val.strip())])
+    elif '~' in value:
+        max_torque_rpm = max([convert_to_float_torque(val.strip())
+            for val in value.lower().split('rpm')[0].split('~')
+            if convert_to_float_torque(val.strip())])
     else:
-      if 'nm' in value.lower():
-        return convert_to_float_torque(value.lower().split('nm')[0].strip()), None
-      else:
-        raise ValueError(f'Unknoun split sign: {value}')
+        max_torque_rpm = convert_to_float_torque(
+            value.lower().split('rpm')[0].strip())
+    return max_torque_rpm
 
-    splitted_value = value.split(split_sign)
-    # Обрабатываю 1 часть строки:
-    value_1 = splitted_value[0]
-    if 'nm' in value_1.lower():
-      torque = convert_to_float_torque(value_1.lower().split('nm')[0].strip())
-    elif 'kgm' in value_1.lower():
-      torque = convert_to_float_torque(
-          value_1.lower().split('kgm')[0].strip()) * 9.80665
-    elif '(' in value_1:
-      torque = convert_to_float_torque(value_1.split('(')[0].strip())
+
+def parce_torque(value: str) -> tuple[float, float]:
+    """Функция для корректного парсинга значений из признака torque и разделения их на 2: torque и max_torque_rpm
+
+    Args:
+        value (str): Строковое значение для преобразования
+
+    Raises:
+        ValueError: В данных отсутствуют допустимые разделители
+
+    Returns:
+        tuple[float, float]: Кортеж с 2 значениями типа float для новых признаков: torque и max_torque_rpm
+    """
+    if (value is None) | (value is np.nan) | (value == ''):
+        return None, None
+
+    try:
+        # Обрабатываю разные варианты разделителей
+        if '@' in value:
+            split_sign = '@'
+        elif 'at' in value:
+            split_sign = 'at'
+        elif '/' in value:
+            split_sign = '/'
+        else:
+            if 'nm' in value.lower():
+                return convert_to_float_torque(value.lower().split('nm')[0].strip()), None
+            else:
+                raise ValueError(f'Unknoun split sign: {value}')
+
+        splitted_value = value.split(split_sign)
+        # Обрабатываю 1 часть строки:
+        value_1 = splitted_value[0]
+        if 'nm' in value_1.lower():
+            torque = convert_to_float_torque(value_1.lower().split('nm')[0].strip())
+        elif 'kgm' in value_1.lower():
+            torque = convert_to_float_torque(value_1.lower().split('kgm')[0].strip()) * 9.80665
+        elif '(' in value_1:
+            torque = convert_to_float_torque(value_1.split('(')[0].strip())
+        else:
+            torque = convert_to_float_torque(value_1.strip()) * 9.80665
+
+        # Обрабатываю 2 часть строки:
+        value_2 = splitted_value[1:]
+        if len(value_2) > 1:
+            value_2 = value_2[0].lower().split('(')[0].strip()
+            max_torque_rpm = parce_2_part(value_2)
+        else:
+            value_2 = value_2[0]
+        max_torque_rpm = parce_2_part(value_2)
+    except Exception as e:
+        print(e)
+        print(value)
     else:
-      torque = convert_to_float_torque(value_1.strip()) * 9.80665
-
-    # Обрабатываю 2 часть строки:
-    value_2 = splitted_value[1:]
-    if len(value_2) > 1:
-      value_2 = value_2[0].lower().split('(')[0].strip()
-      max_torque_rpm = parce_2_part(value_2)
-    else:
-      value_2 = value_2[0]
-      max_torque_rpm = parce_2_part(value_2)
-  except Exception as e:
-    print(e)
-    print(value)
-  else:
-    return torque, max_torque_rpm
-
-
-
-
-
-
+        return torque, max_torque_rpm

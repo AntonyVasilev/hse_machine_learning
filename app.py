@@ -4,6 +4,7 @@ import plotly.express as px
 from sklearn.metrics import r2_score, mean_absolute_percentage_error
 from pathlib import Path
 import phik  # noqa: F401
+from datetime import datetime
 import traceback
 from functions import load_model, prepare_features, load_transforms, prepare_loaded_dataframe, load_additional_data
 
@@ -17,9 +18,9 @@ FEATURE_NAMES_PATH = DATA_DIR / "feature_names.pkl"
 
 target_col_name = 'selling_price'
 
-# TODO: Реализовать предсказание через заполнение формы с фичами (после реализации предыдущего TODO)
-
+#--------------------------------------------------------------------------------------------------
 # Загружаем модель
+
 try:
     model, feature_names = load_model(model_path=MODEL_PATH, feacture_names_path=FEATURE_NAMES_PATH)
     feature_names = list(feature_names)
@@ -36,7 +37,7 @@ except Exception as e:
     st.error(f"Ошибка загрузки для подготовки данных: {e}")
     st.stop()
 
-
+#--------------------------------------------------------------------------------------------------
 # Визуализация весов модели
 st.subheader("Визуализация весов модели")
 
@@ -54,12 +55,19 @@ if chkbx:
     intercept_df = pd.DataFrame([{'feature_name': 'intercept', 'weight': model.intercept_}])
     df_to_plot = pd.concat([df_to_plot, intercept_df], ignore_index=True)
 
-
 st.line_chart(df_to_plot, x='feature_name' ,y='weight', x_label='Weight', y_label='Feature names')
 
-
+#--------------------------------------------------------------------------------------------------
 st.subheader("Получение прогноза стоимости")
 
+
+"""
+Выбор варианта получения прогноза:
+- 'Загрузка csv-файла' - пользователь загружает csv-файл с данными. Модель делает предсказание по каждому объекту из файла,
+    строит графики с визуализациями данных и рассчитывает метрики кажества предсказания
+- 'Ввод данных в форму' - Пользователь вводит данных в форму для предсказания одного объекта. Модель делает предсказание
+    и выводит получившийся прогноз
+"""
 pred_type = st.radio(
     'Выберите тип получения прогноза',
     ['Загрузка csv-файла', 'Ввод данных в форму'],
@@ -69,6 +77,7 @@ pred_type = st.radio(
     ]
 )
 
+# В зависимости от выбранного выполняем необходимые действия
 if pred_type == 'Загрузка csv-файла':
     # Загрузка CSV файла
     uploaded_file = st.file_uploader("Загрузите CSV файл", type=["csv"])
@@ -100,7 +109,7 @@ if pred_type == 'Загрузка csv-файла':
         )
         st.plotly_chart(fig1, width='stretch')
     with plot_col2:
-        # Гистаграмма распрелделения целевой переменной
+        # Гистограмма распрелделения целевой переменной
         fig2 = px.histogram(
             df_to_plot, 
             x=target_col_name, 
@@ -112,6 +121,7 @@ if pred_type == 'Загрузка csv-файла':
     plot_col3, plot_col4 = st.columns(2)
     
     with plot_col3:
+        # Phik-матрица корреляций признаков
         corr_matrix = df_to_plot.phik_matrix()
         fig3 = px.imshow(
             corr_matrix, 
@@ -121,6 +131,7 @@ if pred_type == 'Загрузка csv-файла':
         )
         st.plotly_chart(fig3, width='stretch')
     with plot_col4:
+        # Средние цены в по годам с учетом количества сидений в автомобиле
         mean_prices_by_year = df_to_plot.groupby(['year', 'seats']).agg(mean_price=(target_col_name, 'mean')).reset_index()
         mean_prices_by_year['seats'] = mean_prices_by_year['seats'].astype('int')
         fig4 = px.bar(
@@ -133,6 +144,7 @@ if pred_type == 'Загрузка csv-файла':
         )
         st.plotly_chart(fig4, width='stretch')
 
+    # Приведение данных, загруженных пользователем, к формату, требуемому моделью
     df_prepared = prepare_loaded_dataframe(
         data=df,
         cols_with_na=cols_with_na,
@@ -146,6 +158,7 @@ if pred_type == 'Загрузка csv-файла':
         polynominal_features=polynominal_features
     )
 
+    # Получение предсказания
     try:
         df_prepared = prepare_features(df_prepared, feature_names)
         X, y = df_prepared, df[target_col_name]
@@ -166,9 +179,20 @@ if pred_type == 'Загрузка csv-файла':
         rmse = mean_absolute_percentage_error(y, prediction) * 100
         st.metric("MAPE", f"{rmse:.2f}%", help='Средняя абсолютная процентная ошибка')
 
+    prediction_df = pd.DataFrame(data=prediction, columns=['prediction'])
+    st.download_button(
+        label='Скачать результат',
+        data=prediction_df.to_csv(index=False).encode("utf-8"),
+        file_name=f"car_price_predictions_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv",
+        help='Скачать результат предсказания стоимости автомобилей в формате csv',
+        mime="text/csv",
+        icon=":material/download:",
+    )
+
 else:
     st.subheader("Сделать предсказание для нового клиента")
 
+    # Формирование полей формы для выбора/ввода значений
     with st.form("prediction_form"):
         col_left, col_right = st.columns(2)
         input_data = {}
@@ -189,9 +213,11 @@ else:
 
         submitted = st.form_submit_button("Получить предсказание", width='stretch')
 
+    # Когда назата кнопка "Получить предсказание" делаем предсказание
     if submitted:
         result = st.empty()
         try:
+            # Преобразуем данные из формы в датафрейм и прифодим их к нужному для модели формату
             input_df = pd.DataFrame([input_data])
             input_df_prepared = prepare_loaded_dataframe(
                 data=input_df,
@@ -206,6 +232,7 @@ else:
                 polynominal_features=polynominal_features
             )
             input_df_prepared = prepare_features(input_df_prepared, feature_names)
+            # Расчет предсказания
             prediction = model.predict(input_df_prepared)
             prediction = round(float(prediction[0]), 2)
 
@@ -213,4 +240,3 @@ else:
         except Exception as e:
             st.error(f"Ошибка при предсказании: {e}")
             st.error(traceback.format_exc())
-

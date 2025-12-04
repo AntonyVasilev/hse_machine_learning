@@ -82,12 +82,12 @@ with plot_col1:
     )
     st.plotly_chart(fig1, width='stretch')
 with plot_col2:
-    # Гистограмма распрелделения целевой переменной
+    # Гистограмма распределения целевой переменной
     fig2 = px.histogram(
         df_to_plot, 
         x=target_col_name, 
         marginal="box", 
-        title='Гистаграмма распрелделения целевой переменной'
+        title='Гистаграмма распределения целевой переменной'
     )
     st.plotly_chart(fig2, width='stretch')
 

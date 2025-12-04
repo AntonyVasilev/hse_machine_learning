@@ -2,7 +2,8 @@
 ## Исполнитель: Васильев А.Н.
 
 Запуск: `streamlit run app.py`  
-Работающее приложение: https://anton-vasilev-hse-ml-hw1.streamlit.app/
+Работающее приложение: https://anton-vasilev-hse-ml-hw1.streamlit.app/ *
+* Из-за визуализации phik-матрицы немного притормаживает
   
 ### Структура проекта:
 - Корень проекта

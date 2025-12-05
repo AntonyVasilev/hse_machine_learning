@@ -34,6 +34,10 @@ def prepare_loaded_dataframe(
     """
     df = data.copy()
 
+    # Удаление дубликатов в данных
+    idxs_to_drop = df.drop('selling_price', axis=1).duplicated(keep='first')
+    df = df.loc[~idxs_to_drop, :].reset_index(drop=True)
+
     # Приведение признаков 'mileage', 'engine', 'max_power' к формату float
     for col_ in ['mileage', 'engine', 'max_power']:
         df[col_] = df[col_].apply(convert_to_float)

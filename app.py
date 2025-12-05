@@ -66,6 +66,13 @@ st.subheader("Визуализации обучающих данных")
 df_to_plot = load_train_data(path=DATA_DIR)
 df_to_plot['brand'] = df_to_plot['name'].apply(lambda val: val.split()[0])
 
+# Удаление дубликатов в данных
+idxs_to_drop = df_to_plot.drop('selling_price', axis=1).duplicated(keep='first')
+df_to_plot = df_to_plot.loc[~idxs_to_drop, :].reset_index(drop=True)
+
+# Заполнение медианой пропущенных значений
+df_to_plot = df_to_plot.fillna(na_fill_mapping)
+
 plot_col1, plot_col2 = st.columns(2)
 
 with plot_col1:
